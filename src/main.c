@@ -11,10 +11,10 @@
 #include <pthread.h>
 #include "include/globals.h"
 #include "include/parsers.h"
-#include "include/encrypter.h"
+#include "include/encoder.h"
+#include "include/utils.h"
 
-#define PORT 6379
-#define MAX_CLIENTS 100
+struct HashEntry *hash_table[TABLE_SIZE];
 
 void *handle_client(void *arg)
 {
@@ -26,7 +26,7 @@ void *handle_client(void *arg)
 	{
 		char request[4096];
 		char response[1024];
-		char default_response[] = "+PONG\r\n";
+		char default_response[] = "PONG";
 
 		int bytes_read = recv(client_fd, request, sizeof(request), 0);
 
@@ -56,14 +56,53 @@ void *handle_client(void *arg)
 			printf("No commands sent from client!\n");
 		}
 
-		if (memcmp(commands[0], "ECHO", strlen("ECHO")) == 0)
+		if (strcmp(commands[0], "ECHO") == 0)
 		{
+			// ECHO command
+			if (numberOfCommands != 2)
+			{
+				printf("[WARN] One agrument for 'ECHO' is required, got %d!\n", numberOfCommands);
+			}
 			encodeBulkString(response, sizeof(response), commands[1], strlen(commands[1]));
 			send(client_fd, response, strlen(response), 0);
 		}
+		else if (strcmp(commands[0], "SET") == 0)
+		{
+			// SET command
+			if (numberOfCommands != 3)
+			{
+				printf("[WARN] Two agrument for 'SET' are required, got %d!\n", numberOfCommands);
+			}
+
+			set(hash_table, commands[1], commands[2]);
+
+			encodeSimpleString(response, sizeof(response), "OK");
+			send(client_fd, response, strlen(response), 0);
+		}
+		else if (strcmp(commands[0], "GET") == 0)
+		{
+			// GET command
+			if (numberOfCommands != 2)
+			{
+				printf("[WARN] One agrument for 'GET' is required, got %d!\n", numberOfCommands);
+			}
+
+			char *value = get((const struct HashEntry **)hash_table, commands[1]);
+
+			if (value == NULL)
+			{
+				send(client_fd, "$-1\r\n", strlen("$-1\r\n"), 0);
+			}
+			else
+			{
+				encodeBulkString(response, sizeof(response), value, strlen(value));
+				send(client_fd, response, strlen(response), 0);
+			}
+		}
 		else
 		{
-			send(client_fd, default_response, strlen(default_response), 0);
+			encodeSimpleString(response, sizeof(response), default_response);
+			send(client_fd, response, strlen(response), 0);
 		}
 	}
 
@@ -126,7 +165,7 @@ int main(int argc, char *argv[])
 
 	while (1)
 	{
-		int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t*) &client_addr_len);
+		int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
 
 		if (client_fd < 0)
 		{
