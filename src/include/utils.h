@@ -1,5 +1,6 @@
 #include "globals.h"
 #include <string.h>
+#include <sys/time.h>
 
 unsigned int hash(const char *key)
 {
@@ -11,8 +12,14 @@ unsigned int hash(const char *key)
   return hash % TABLE_SIZE;
 }
 
-void set(struct HashEntry **hash_table, const char *key, const char *value)
+void set(struct HashEntry **hash_table, const char *key, const char *value, const long long expiry)
 {
+  struct timeval time; /* Getting time of the day from "sys/time.h" */
+  gettimeofday(&time, NULL);
+
+  const int currentTimestamp = time.tv_usec / 1000;         // miliseconds | current timestamp
+  const int expiryTimestamp = time.tv_usec / 1000 + expiry; // miliseconds | expiry timestamp
+
   unsigned int hashedVal = hash(key);
 
   struct HashEntry *hashEntry = hash_table[hashedVal];
@@ -47,7 +54,17 @@ void set(struct HashEntry **hash_table, const char *key, const char *value)
 
     strcpy(newHashEntry->key, key);
     strcpy(newHashEntry->value, value);
+
     newHashEntry->next = NULL;
+    if (expiry != -1)
+    {
+      newHashEntry->expiresAt = expiryTimestamp;
+    }
+    else
+    {
+      newHashEntry->expiresAt = -1;
+    }
+    newHashEntry->createdAt = currentTimestamp;
 
     hash_table[hashedVal] = newHashEntry;
   }
@@ -69,7 +86,7 @@ void set(struct HashEntry **hash_table, const char *key, const char *value)
         return;
       }
 
-      newHashEntry->key = (char*) malloc(strlen(key) + 1);
+      newHashEntry->key = (char *)malloc(strlen(key) + 1);
       if (newHashEntry->key == NULL)
       {
         printf("SET command failed to execute - out of memory!\n");
@@ -77,18 +94,28 @@ void set(struct HashEntry **hash_table, const char *key, const char *value)
         return;
       }
 
-      newHashEntry->value = (char*) malloc(strlen(value) + 1);
+      newHashEntry->value = (char *)malloc(strlen(value) + 1);
       if (newHashEntry->value == NULL)
       {
         printf("SET command failed to execute - out of memory!\n");
         free(newHashEntry->key);
         free(newHashEntry);
         return;
-      } 
+      }
 
       strcpy(newHashEntry->key, key);
       strcpy(newHashEntry->value, value);
+
       newHashEntry->next = NULL;
+      if (expiry != -1)
+      {
+        newHashEntry->expiresAt = expiryTimestamp;
+      }
+      else
+      {
+        newHashEntry->expiresAt = -1;
+      }
+      newHashEntry->createdAt = currentTimestamp;
 
       pointer->next = newHashEntry;
     }
@@ -100,10 +127,15 @@ void set(struct HashEntry **hash_table, const char *key, const char *value)
   }
 }
 
-char *get(const struct HashEntry **hash_table, const char *key)
+char *get(struct HashEntry **hash_table, const char *key)
 {
+  struct timeval time; /* Getting time of the day from "sys/time.h" */
+  gettimeofday(&time, NULL);
+
+  const int currentTimestamp = time.tv_usec / 1000;
+
   unsigned int hashedVal = hash(key);
-  const struct HashEntry *hashEntry = hash_table[hashedVal];
+  struct HashEntry *hashEntry = hash_table[hashedVal];
 
   if (hashEntry == NULL)
   {
@@ -111,9 +143,12 @@ char *get(const struct HashEntry **hash_table, const char *key)
   }
   else
   {
-    const struct HashEntry *pointer = hashEntry;
+    struct HashEntry *pointer = hashEntry;
+    struct HashEntry *prevPointer = NULL;
+
     while (pointer->next != NULL && strcmp(pointer->key, key) != 0)
     {
+      prevPointer = pointer;
       pointer = pointer->next;
     }
 
@@ -121,6 +156,16 @@ char *get(const struct HashEntry **hash_table, const char *key)
     {
       if (strcmp(pointer->key, key) == 0)
       {
+        if (pointer->expiresAt != -1 && pointer->expiresAt < currentTimestamp)
+        {
+          if (prevPointer != NULL)
+          {
+            prevPointer->next = pointer->next;
+          }
+
+          free(pointer);
+          return NULL;
+        }
         return pointer->value;
       }
       else
@@ -133,4 +178,22 @@ char *get(const struct HashEntry **hash_table, const char *key)
       return NULL;
     }
   }
+}
+
+int compare(const char *primary, const char *secondary)
+{
+  if (strlen(primary) != strlen(secondary))
+  {
+    return strlen(primary) > strlen(secondary) ? 1 : -1;
+  }
+
+  for (int idx = 0; idx < strlen(primary); idx++)
+  {
+    if (toupper(primary[idx]) != toupper(secondary[idx]))
+    {
+      return toupper(primary[idx]) > toupper(secondary[idx]) ? 1 : -1;
+    }
+  }
+
+  return 0;
 }

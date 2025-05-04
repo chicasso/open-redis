@@ -16,6 +16,14 @@
 
 struct HashEntry *hash_table[TABLE_SIZE];
 
+struct RDBConfig
+{
+	char *fileName;
+	char *path;
+};
+
+struct RDBConfig *config;
+
 void *handle_client(void *arg)
 {
 	struct client_info *info = (struct client_info *)arg;
@@ -46,6 +54,11 @@ void *handle_client(void *arg)
 		char **commands;
 		int numberOfCommands = 0;
 
+		for (int idx = 0; idx < numberOfCommands; idx++)
+		{
+			printf("[RESP-%d]=%s\n", idx + 1, commands[idx]);
+		}
+
 		if (request[0] == '*')
 		{
 			commands = parseEncodedArray(request, bytes_read, &numberOfCommands);
@@ -74,7 +87,33 @@ void *handle_client(void *arg)
 				printf("[WARN] Two agrument for 'SET' are required, got %d!\n", numberOfCommands);
 			}
 
-			set(hash_table, commands[1], commands[2]);
+			long long expiry = -1;
+
+			if (numberOfCommands == 5)
+			{
+				expiry = 0;
+				int pxIndex = -1;
+
+				for (int idx = 0; idx < numberOfCommands; idx++)
+				{
+					if (compare(commands[idx], "px") == 0)
+					{
+						pxIndex = idx;
+						break;
+					}
+				}
+
+				if (pxIndex != -1)
+				{
+					for (int idx = 0; idx < strlen(commands[pxIndex + 1]); idx++)
+					{
+						expiry *= 10;
+						expiry += commands[pxIndex + 1][idx] - '0';
+					}
+				}
+			}
+
+			set(hash_table, commands[1], commands[2], expiry);
 
 			encodeSimpleString(response, sizeof(response), "OK");
 			send(client_fd, response, strlen(response), 0);
@@ -87,7 +126,7 @@ void *handle_client(void *arg)
 				printf("[WARN] One agrument for 'GET' is required, got %d!\n", numberOfCommands);
 			}
 
-			char *value = get((const struct HashEntry **)hash_table, commands[1]);
+			char *value = get((struct HashEntry **)hash_table, commands[1]);
 
 			if (value == NULL)
 			{
@@ -114,6 +153,42 @@ void *handle_client(void *arg)
 
 int main(int argc, char *argv[])
 {
+
+	config = (struct RDBConfig *)malloc(sizeof(struct RDBConfig));
+
+	for (int idx = 0; idx < argc; idx++)
+	{
+		printf("[AGRGUMENT-%d]: %s\n", idx + 1, argv[idx]);
+
+		if (compare(argv[idx], "--dir") == 0)
+		{
+			config->path = (char *)malloc(strlen(argv[idx]));
+
+			if (config->path == NULL)
+			{
+				printf("Out of memory!\n");
+				free(config);
+				return 1;
+			}
+
+			strcpy(config->path, argv[idx]);
+		}
+		else if (compare(argv[idx], "--dbfilename") == 0)
+		{
+			config->fileName = (char *)malloc(strlen(argv[idx]));
+
+			if (config->fileName == NULL)
+			{
+				printf("Out of memory!\n");
+				free(config);
+				free(config->path);
+				return 1;
+			}
+
+			strcpy(config->fileName, argv[idx]);
+		}
+	}
+
 	setbuf(stdout, NULL);
 	setbuf(stderr, NULL);
 

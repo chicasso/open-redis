@@ -27,7 +27,7 @@ char **parseEncodedArray(char *request, int request_size, int *N)
 	for (int idx = index + 2; idx < request_size; idx++) // +2 to skip first CRLF
 	{
 		int length = 0;
-		
+
 		if (request[idx] == '$') // next numeric bytes will containt the number of bytes of the content
 		{
 			idx += 1;
