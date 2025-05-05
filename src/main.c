@@ -54,11 +54,6 @@ void *handle_client(void *arg)
 		char **commands;
 		int numberOfCommands = 0;
 
-		for (int idx = 0; idx < numberOfCommands; idx++)
-		{
-			printf("[RESP-%d]=%s\n", idx + 1, commands[idx]);
-		}
-
 		if (request[0] == '*')
 		{
 			commands = parseEncodedArray(request, bytes_read, &numberOfCommands);
@@ -69,7 +64,7 @@ void *handle_client(void *arg)
 			printf("No commands sent from client!\n");
 		}
 
-		if (strcmp(commands[0], "ECHO") == 0)
+		if (compare(commands[0], "ECHO") == 0)
 		{
 			// ECHO command
 			if (numberOfCommands != 2)
@@ -79,7 +74,7 @@ void *handle_client(void *arg)
 			encodeBulkString(response, sizeof(response), commands[1], strlen(commands[1]));
 			send(client_fd, response, strlen(response), 0);
 		}
-		else if (strcmp(commands[0], "SET") == 0)
+		else if (compare(commands[0], "SET") == 0)
 		{
 			// SET command
 			if (numberOfCommands != 3)
@@ -118,7 +113,7 @@ void *handle_client(void *arg)
 			encodeSimpleString(response, sizeof(response), "OK");
 			send(client_fd, response, strlen(response), 0);
 		}
-		else if (strcmp(commands[0], "GET") == 0)
+		else if (compare(commands[0], "GET") == 0)
 		{
 			// GET command
 			if (numberOfCommands != 2)
@@ -136,6 +131,36 @@ void *handle_client(void *arg)
 			{
 				encodeBulkString(response, sizeof(response), value, strlen(value));
 				send(client_fd, response, strlen(response), 0);
+			}
+		}
+		else if (compare(commands[0], "CONFIG") == 0)
+		{ // CONFIG command
+			printf("CONFIG\n");
+
+			if (compare(commands[1], "GET") == 0 && numberOfCommands > 2)
+			{ // CONFIG GET
+				char* option = commands[2];
+
+				if (compare(option, "dir") == 0)
+				{
+					int configs = 2;
+
+					char **source = (char **)malloc(configs);
+					source[0] = (char *)malloc(strlen(option));
+					source[1] = (char *)malloc(strlen(config->path));
+					
+					strncpy(source[0], option, strlen(option));
+					strncpy(source[1], config->path, strlen(config->path));
+					
+					encodeStringArray(response, source, configs);
+					
+					printf("Encoded String Array: %s\n", response);
+					send(client_fd, response, strlen(response), 0);
+				}
+			}
+			else
+			{ // SET
+				// send(client_fd, response, strlen(response), 0);
 			}
 		}
 		else
@@ -162,7 +187,7 @@ int main(int argc, char *argv[])
 
 		if (compare(argv[idx], "--dir") == 0)
 		{
-			config->path = (char *)malloc(strlen(argv[idx]));
+			config->path = (char *)malloc(strlen(argv[idx + 1]));
 
 			if (config->path == NULL)
 			{
@@ -171,11 +196,11 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 
-			strcpy(config->path, argv[idx]);
+			strcpy(config->path, argv[idx + 1]);
 		}
 		else if (compare(argv[idx], "--dbfilename") == 0)
 		{
-			config->fileName = (char *)malloc(strlen(argv[idx]));
+			config->fileName = (char *)malloc(strlen(argv[idx + 1]));
 
 			if (config->fileName == NULL)
 			{
@@ -185,7 +210,7 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 
-			strcpy(config->fileName, argv[idx]);
+			strcpy(config->fileName, argv[idx + 1]);
 		}
 	}
 

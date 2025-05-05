@@ -1,6 +1,34 @@
+#pragma once
+
 #include "globals.h"
 #include <string.h>
 #include <sys/time.h>
+
+int compare(const char*, const char*);
+
+int calculateExponent(int e, int p)
+{
+  int exponent = e;
+  for (int idx = 1; idx < p; idx++)
+  {
+    exponent *= e;
+  }
+
+  return exponent;
+}
+
+int calculateDigits(int number)
+{
+  int num = number;
+
+  int digits = 0;
+  while (number > 0)
+  {
+    digits += 1;
+    number /= 10;
+  }
+  return digits;
+}
 
 unsigned int hash(const char *key)
 {
@@ -71,12 +99,12 @@ void set(struct HashEntry **hash_table, const char *key, const char *value, cons
   else
   {
     struct HashEntry *pointer = hashEntry;
-    while (pointer->next != NULL && strcmp(pointer->key, key) != 0)
+    while (pointer->next != NULL && compare(pointer->key, key) != 0)
     {
       pointer = pointer->next;
     }
 
-    if (pointer->next == NULL && strcmp(pointer->key, key) != 0)
+    if (pointer->next == NULL && compare(pointer->key, key) != 0)
     {
       // Add new HashEntry
       struct HashEntry *newHashEntry = (struct HashEntry *)malloc(sizeof(struct HashEntry));
@@ -146,7 +174,7 @@ char *get(struct HashEntry **hash_table, const char *key)
     struct HashEntry *pointer = hashEntry;
     struct HashEntry *prevPointer = NULL;
 
-    while (pointer->next != NULL && strcmp(pointer->key, key) != 0)
+    while (pointer->next != NULL && compare(pointer->key, key) != 0)
     {
       prevPointer = pointer;
       pointer = pointer->next;
@@ -154,7 +182,7 @@ char *get(struct HashEntry **hash_table, const char *key)
 
     if (pointer != NULL)
     {
-      if (strcmp(pointer->key, key) == 0)
+      if (compare(pointer->key, key) == 0)
       {
         if (pointer->expiresAt != -1 && pointer->expiresAt < currentTimestamp)
         {

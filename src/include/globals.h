@@ -1,5 +1,8 @@
+#pragma once
+
 #define PORT 6379
 #define TABLE_SIZE 1024
+#define MAX_CONFIG 1024
 
 struct client_info
 {
