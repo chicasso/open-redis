@@ -75,13 +75,12 @@ void encodeStringArray(char *destination, char **source, int length)
 		lengthTemp = (lengthTemp % tenPow);
 	}
 
-	destination[destinationIndex++] =  (char)(lengthTemp + 48);
+	destination[destinationIndex++] = (char)(lengthTemp + 48);
 	destination[destinationIndex++] = '\r';
 	destination[destinationIndex++] = '\n';
 
 	for (int idx = 0; idx < length; idx++)
 	{
-		// FORMAT: of Redis Request => * 2 \r\n $ 4 \r\n ECHO \r\n $ 9 \r\n raspberry \r\n
 		destination[destinationIndex++] = '$';
 
 		char *info = source[idx];
@@ -95,13 +94,13 @@ void encodeStringArray(char *destination, char **source, int length)
 			int trailingN_1 = lengthTemp - (lengthTemp % tenPow);
 			int firstDigit = trailingN_1 / tenPow;
 
-			printf("ItoC [2]: %d -> %c\n", firstDigit,  (char)(firstDigit + 48));
+			printf("ItoC [2]: %d -> %c\n", firstDigit, (char)(firstDigit + 48));
 
 			destination[destinationIndex++] = (char)(firstDigit + 48);
 			lengthTemp = (lengthTemp % tenPow);
 		}
 
-		destination[destinationIndex++] =  (char)(lengthTemp + 48);
+		destination[destinationIndex++] = (char)(lengthTemp + 48);
 		destination[destinationIndex++] = '\r';
 		destination[destinationIndex++] = '\n';
 

@@ -4,7 +4,7 @@
 #include <string.h>
 #include <sys/time.h>
 
-int compare(const char*, const char*);
+int compare(const char *, const char *);
 
 int calculateExponent(int e, int p)
 {
@@ -40,7 +40,7 @@ unsigned int hash(const char *key)
   return hash % TABLE_SIZE;
 }
 
-void set(struct HashEntry **hash_table, const char *key, const char *value, const long long expiry)
+void set(struct HashEntry **hash_table, enum RedisTypes type, const char *key, const char *value, const long long expiry)
 {
   struct timeval time; /* Getting time of the day from "sys/time.h" */
   gettimeofday(&time, NULL);
@@ -61,6 +61,7 @@ void set(struct HashEntry **hash_table, const char *key, const char *value, cons
       return;
     }
 
+    newHashEntry->Type = type;
     newHashEntry->key = (char *)malloc(strlen(key) + 1);
 
     if (newHashEntry->key == NULL)
@@ -114,6 +115,7 @@ void set(struct HashEntry **hash_table, const char *key, const char *value, cons
         return;
       }
 
+      newHashEntry->Type = type;
       newHashEntry->key = (char *)malloc(strlen(key) + 1);
       if (newHashEntry->key == NULL)
       {
@@ -205,6 +207,40 @@ char *get(struct HashEntry **hash_table, const char *key)
     {
       return NULL;
     }
+  }
+}
+
+long long increment(struct HashEntry **hash_table, const char *key)
+{
+  char *value = get(hash_table, key);
+
+  if (value == NULL)
+  { // Key is not present
+    set(hash_table, NUMBER, key, (const char *)"1", -1);
+    return 1;
+  }
+  else
+  { // Key is present
+    char *end = NULL;
+    long long number = strtoll(value, &end, 10);
+
+    if (*end != '\0')
+    {
+      printf("Type Error, Cannot INCR non-numerical values!\n");
+      return NONUM;
+    }
+
+    number += 1;
+    char newValue[32];
+
+    snprintf(
+        newValue,
+        sizeof(newValue),
+        "%lld",
+        number);
+
+    set(hash_table, NUMBER, key, newValue, -1);
+    return number;
   }
 }
 

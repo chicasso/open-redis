@@ -38,6 +38,9 @@ void *handle_client(void *arg)
 
 		int bytes_read = recv(client_fd, request, sizeof(request), 0);
 
+		// Printing request
+		printf("Request: %s\n", request);
+
 		if (bytes_read == 0)
 		{
 			printf("Client disconnected\n");
@@ -53,6 +56,12 @@ void *handle_client(void *arg)
 
 		char **commands;
 		int numberOfCommands = 0;
+
+		// Just logging commands for debugging
+		for (int idx = 0; idx < numberOfCommands; idx++)
+		{
+			printf("[Command %d] %s\n", idx + 1, commands[idx]);
+		}
 
 		if (request[0] == '*')
 		{
@@ -108,7 +117,7 @@ void *handle_client(void *arg)
 				}
 			}
 
-			set(hash_table, commands[1], commands[2], expiry);
+			set(hash_table, STRING, commands[1], commands[2], expiry);
 
 			encodeSimpleString(response, sizeof(response), "OK");
 			send(client_fd, response, strlen(response), 0);
@@ -139,7 +148,7 @@ void *handle_client(void *arg)
 
 			if (compare(commands[1], "GET") == 0 && numberOfCommands > 2)
 			{ // CONFIG GET
-				char* option = commands[2];
+				char *option = commands[2];
 
 				if (compare(option, "dir") == 0)
 				{
@@ -148,12 +157,12 @@ void *handle_client(void *arg)
 					char **source = (char **)malloc(configs);
 					source[0] = (char *)malloc(strlen(option));
 					source[1] = (char *)malloc(strlen(config->path));
-					
+
 					strncpy(source[0], option, strlen(option));
 					strncpy(source[1], config->path, strlen(config->path));
-					
+
 					encodeStringArray(response, source, configs);
-					
+
 					printf("Encoded String Array: %s\n", response);
 					send(client_fd, response, strlen(response), 0);
 				}
@@ -161,6 +170,26 @@ void *handle_client(void *arg)
 			else
 			{ // SET
 				// send(client_fd, response, strlen(response), 0);
+			}
+		}
+		else if (compare(commands[0], "INCR") == 0)
+		{ // INCR: Increment value by 1 if number
+			char *key = commands[1];
+			long long number = increment(hash_table, key);
+
+			if (number == NONUM)
+			{
+				// do some stuff
+				// because error occurred!
+			}
+			else
+			{
+				snprintf(
+						response,
+						sizeof(response),
+						":%lld\r\n",
+						number);
+				send(client_fd, response, strlen(response), 0);
 			}
 		}
 		else
@@ -183,7 +212,7 @@ int main(int argc, char *argv[])
 
 	for (int idx = 0; idx < argc; idx++)
 	{
-		printf("[AGRGUMENT-%d]: %s\n", idx + 1, argv[idx]);
+		printf("[argv-%d]: %s\n", idx + 1, argv[idx]);
 
 		if (compare(argv[idx], "--dir") == 0)
 		{
