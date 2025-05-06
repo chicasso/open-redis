@@ -14,7 +14,11 @@
 #include "include/encoder.h"
 #include "include/utils.h"
 
+static int queueing = 0;
+
 struct HashEntry *hash_table[TABLE_SIZE];
+struct TransactionQueue *transactionQueue = NULL;
+struct TransactionQueue *transactionQueueTail = NULL;
 
 struct RDBConfig
 {
@@ -84,8 +88,7 @@ void *handle_client(void *arg)
 			send(client_fd, response, strlen(response), 0);
 		}
 		else if (compare(commands[0], "SET") == 0)
-		{
-			// SET command
+		{ // SET command
 			if (numberOfCommands != 3)
 			{
 				printf("[WARN] Two agrument for 'SET' are required, got %d!\n", numberOfCommands);
@@ -117,7 +120,53 @@ void *handle_client(void *arg)
 				}
 			}
 
-			set(hash_table, STRING, commands[1], commands[2], expiry);
+			if (queueing != 0)
+			{ // Active transaction
+				struct TransactionQueue *transaction =
+						(struct TransactionQueue *)malloc(
+								sizeof(struct TransactionQueue));
+
+				transaction->expiresAt = expiry;
+				transaction->operation = SET;
+				transaction->next = NULL;
+
+				transaction->key = (char *)malloc(strlen(commands[1]));
+
+				if (transaction->key == NULL)
+				{
+					printf("Out of memory!\n");
+					free(transaction);
+					return NULL;
+				}
+
+				strcpy(transaction->key, commands[1]);
+
+				transaction->value = (char *)malloc(strlen(commands[2]));
+				if (transaction->value == NULL)
+				{
+					printf("Out of memory!\n");
+					free(transaction->key);
+					free(transaction);
+					return NULL;
+				}
+
+				strcpy(transaction->value, commands[2]);
+
+				if (transactionQueue == NULL)
+				{ // First entry in the queue
+					transactionQueue = transaction;
+					transactionQueueTail = transactionQueue;
+				}
+				else
+				{ // add new entry
+					transactionQueueTail->next = transaction;
+					transactionQueueTail = transactionQueueTail->next;
+				}
+			}
+			else
+			{
+				set(hash_table, STRING, commands[1], commands[2], expiry);
+			}
 
 			encodeSimpleString(response, sizeof(response), "OK");
 			send(client_fd, response, strlen(response), 0);
@@ -175,22 +224,72 @@ void *handle_client(void *arg)
 		else if (compare(commands[0], "INCR") == 0)
 		{ // INCR: Increment value by 1 if number
 			char *key = commands[1];
-			long long number = increment(hash_table, key);
 
-			if (number == NONUM)
-			{
-				// do some stuff
-				// because error occurred!
+			if (queueing != 0)
+			{ // Active transaction
+				struct TransactionQueue *transaction =
+						(struct TransactionQueue *)malloc(
+								sizeof(struct TransactionQueue));
+
+				transaction->expiresAt = -1;
+				transaction->operation = SET;
+				transaction->next = NULL;
+				transaction->value = NULL;
+
+				transaction->key = (char *)malloc(strlen(key));
+
+				if (transaction->key == NULL)
+				{
+					printf("Out of memory!\n");
+					free(transaction);
+					return NULL;
+				}
+
+				strcpy(transaction->key, key);
+
+				if (transactionQueue == NULL)
+				{ // First entry in the queue
+					transactionQueue = transaction;
+					transactionQueueTail = transactionQueue;
+				}
+				else
+				{ // add new entry
+					transactionQueueTail->next = transaction;
+					transactionQueueTail = transactionQueueTail->next;
+				}
+
+				encodeSimpleString(response, sizeof(response), "OK");
+				send(client_fd, response, strlen(response), 0);
 			}
 			else
 			{
-				snprintf(
-						response,
-						sizeof(response),
-						":%lld\r\n",
-						number);
-				send(client_fd, response, strlen(response), 0);
+				long long number = increment(hash_table, key);
+
+				if (number == NONUM)
+				{
+					// returning error because error occurred!
+					snprintf(response, sizeof(response), "-ERR value is not an integer or out of range\r\n");
+					send(client_fd, response, strlen(response), 0);
+				}
+				else
+				{
+					snprintf(
+							response,
+							sizeof(response),
+							":%lld\r\n",
+							number);
+
+					send(client_fd, response, strlen(response), 0);
+				}
 			}
+		}
+		else if (compare(commands[0], "MULTI") == 0)
+		{
+			queueing = 1;
+			encodeSimpleString(response, sizeof(response), "OK");
+			printf("Sending: %s\n", response);
+
+			send(client_fd, response, strlen(response), 0);
 		}
 		else
 		{
