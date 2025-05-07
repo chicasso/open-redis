@@ -2,6 +2,8 @@
 
 #define PORT 6379
 #define TABLE_SIZE 1024
+#define MAX_KEY_LENGTH 100
+#define MAX_RESPONSE 100
 #define TRANSACTION_SIZE 1024
 #define MAX_CONFIG 1024
 #define NONUM -0.00000000
@@ -35,6 +37,7 @@ enum Operation
 {
 	INCR,
 	SET,
+	GET,
 };
 
 struct TransactionQueue
@@ -43,5 +46,5 @@ struct TransactionQueue
 	char *key;
 	char *value;
 	long long expiresAt;
-	struct TransactionQueue* next;
+	struct TransactionQueue *next;
 };

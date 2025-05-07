@@ -6,7 +6,6 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <math.h>
 #include <ctype.h>
 #include <pthread.h>
 #include "include/globals.h"
@@ -14,7 +13,7 @@
 #include "include/encoder.h"
 #include "include/utils.h"
 
-static int queueing = 0;
+static int queueing = -1;
 
 struct HashEntry *hash_table[TABLE_SIZE];
 struct TransactionQueue *transactionQueue = NULL;
@@ -120,7 +119,7 @@ void *handle_client(void *arg)
 				}
 			}
 
-			if (queueing != 0)
+			if (queueing != -1)
 			{ // Active transaction
 				struct TransactionQueue *transaction =
 						(struct TransactionQueue *)malloc(
@@ -162,14 +161,18 @@ void *handle_client(void *arg)
 					transactionQueueTail->next = transaction;
 					transactionQueueTail = transactionQueueTail->next;
 				}
+
+				queueing += 1;
+
+				encodeSimpleString(response, sizeof(response), "QUEUED");
+				send(client_fd, response, strlen(response), 0);
 			}
 			else
 			{
 				set(hash_table, STRING, commands[1], commands[2], expiry);
+				encodeSimpleString(response, sizeof(response), "OK");
+				send(client_fd, response, strlen(response), 0);
 			}
-
-			encodeSimpleString(response, sizeof(response), "OK");
-			send(client_fd, response, strlen(response), 0);
 		}
 		else if (compare(commands[0], "GET") == 0)
 		{
@@ -179,16 +182,61 @@ void *handle_client(void *arg)
 				printf("[WARN] One agrument for 'GET' is required, got %d!\n", numberOfCommands);
 			}
 
-			char *value = get((struct HashEntry **)hash_table, commands[1]);
+			if (queueing != -1)
+			{ // Active transaction
+				struct TransactionQueue *transaction =
+						(struct TransactionQueue *)malloc(
+								sizeof(struct TransactionQueue));
 
-			if (value == NULL)
-			{
-				send(client_fd, "$-1\r\n", strlen("$-1\r\n"), 0);
+				transaction->expiresAt = -1;
+				transaction->operation = GET;
+				transaction->next = NULL;
+				transaction->value = NULL;
+
+				transaction->key = (char *)malloc(strlen(commands[1]));
+
+				if (transaction->key == NULL)
+				{
+					printf("Out of memory!\n");
+					free(transaction);
+					return NULL;
+				}
+
+				strcpy(transaction->key, commands[1]);
+
+				if (transactionQueue == NULL)
+				{ // First entry in the queue
+					transactionQueue = transaction;
+					transactionQueueTail = transactionQueue;
+				}
+				else
+				{ // add new entry
+					transactionQueueTail->next = transaction;
+					transactionQueueTail = transactionQueueTail->next;
+				}
+
+				queueing += 1;
+
+				encodeSimpleString(response, sizeof(response), "QUEUED");
+				send(client_fd, response, strlen(response), 0);
 			}
 			else
 			{
-				encodeBulkString(response, sizeof(response), value, strlen(value));
-				send(client_fd, response, strlen(response), 0);
+				char *value = get((struct HashEntry **)hash_table, commands[1]);
+
+				if (value == NULL)
+				{
+					free(value);
+
+					send(client_fd, "$-1\r\n", strlen("$-1\r\n"), 0);
+				}
+				else
+				{
+					encodeBulkString(response, sizeof(response), value, strlen(value));
+					free(value);
+
+					send(client_fd, response, strlen(response), 0);
+				}
 			}
 		}
 		else if (compare(commands[0], "CONFIG") == 0)
@@ -225,14 +273,14 @@ void *handle_client(void *arg)
 		{ // INCR: Increment value by 1 if number
 			char *key = commands[1];
 
-			if (queueing != 0)
+			if (queueing != -1)
 			{ // Active transaction
 				struct TransactionQueue *transaction =
 						(struct TransactionQueue *)malloc(
 								sizeof(struct TransactionQueue));
 
 				transaction->expiresAt = -1;
-				transaction->operation = SET;
+				transaction->operation = INCR;
 				transaction->next = NULL;
 				transaction->value = NULL;
 
@@ -258,7 +306,9 @@ void *handle_client(void *arg)
 					transactionQueueTail = transactionQueueTail->next;
 				}
 
-				encodeSimpleString(response, sizeof(response), "OK");
+				queueing += 1;
+
+				encodeSimpleString(response, sizeof(response), "QUEUED");
 				send(client_fd, response, strlen(response), 0);
 			}
 			else
@@ -285,11 +335,49 @@ void *handle_client(void *arg)
 		}
 		else if (compare(commands[0], "MULTI") == 0)
 		{
-			queueing = 1;
+			queueing += 1;
 			encodeSimpleString(response, sizeof(response), "OK");
 			printf("Sending: %s\n", response);
 
 			send(client_fd, response, strlen(response), 0);
+		}
+		else if (compare(commands[0], "EXEC") == 0)
+		{ // Execute the transaction
+			if (queueing == -1)
+			{ // No active transaction
+				snprintf(response, sizeof(response), "-ERR EXEC without MULTI\r\n");
+				send(client_fd, response, strlen(response), 0);
+			}
+			else
+			{
+				if (queueing == 0)
+				{
+					char **source = (char **)malloc(queueing);
+					encodeStringArray(response, source, queueing);
+					free(source);
+
+					send(client_fd, response, strlen(response), 0);
+				}
+				else
+				{
+					int size = 0;
+					char **source = (char **)execute(hash_table, transactionQueue, &queueing, &size);
+
+					for (int i = 0; i < size; i++)
+					{
+						printf("[RESP OUT = %d] %s\n", i + 1, source[i]);
+					}
+
+					// snprintf(response, sizeof(response), "+%d\r\n", size);
+
+					// encodeStringArray(response, source, size);
+
+					printf("Response: %s\n", response);
+
+					send(client_fd, response, strlen(response), 0);
+				}
+				queueing = -1;
+			}
 		}
 		else
 		{

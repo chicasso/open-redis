@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string.h>
 #include <ctype.h>
 #include "utils.h"
@@ -12,9 +14,22 @@ void encodeBulkString(char *destination, int size, char *source, int length)
 	snprintf(
 			destination,
 			size,
-			"$%u\r\n%s\r\n",
+			"$%d\r\n%s\r\n",
 			length,
 			source);
+}
+
+void encodeNumber(char *destination, int number)
+{
+	/** FORMAT:
+	 * ":<number>\r\n"
+	 */
+
+	snprintf(
+			destination,
+			64,
+			":%d\r\n",
+			number);
 }
 
 void encodeSimpleString(char *destination, int size, char *source)
@@ -38,6 +53,12 @@ void encodeStringArray(char *destination, char **source, int length)
 	 * 																			 \ \___ Length of next item
 	 * 																			  \___ '$' Used before the length of next item
 	 */
+
+	if (destination == NULL)
+	{
+		printf("Destination should be not NULL!\n");
+		return;
+	}
 
 	int lengthTemp = length;
 
@@ -81,6 +102,12 @@ void encodeStringArray(char *destination, char **source, int length)
 
 	for (int idx = 0; idx < length; idx++)
 	{
+		if (source == NULL)
+		{
+			printf("Source is NULL!\n");
+			break;
+		}
+
 		destination[destinationIndex++] = '$';
 
 		char *info = source[idx];

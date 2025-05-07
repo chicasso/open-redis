@@ -2,7 +2,11 @@
 
 #include "globals.h"
 #include <string.h>
+#include "encoder.h"
 #include <sys/time.h>
+
+int calculateDigits(int number);
+int calculateExponent(int e, int p);
 
 int compare(const char *, const char *);
 
@@ -242,6 +246,93 @@ long long increment(struct HashEntry **hash_table, const char *key)
     set(hash_table, NUMBER, key, newValue, -1);
     return number;
   }
+}
+
+char **execute(struct HashEntry **hash_table, struct TransactionQueue *transactionQueue, int *queueSize, int *items)
+{
+  printf("Execute Transaction [*%d]\n", *queueSize);
+
+  char **responses = (char **)malloc((*queueSize) * sizeof(char));
+  struct TransactionQueue *ptr = transactionQueue;
+
+  int idx = 0;
+  while (ptr != NULL && (*queueSize) > 0)
+  {
+    printf("[EXEC = %d] %s %s [OPR = ", idx + 1, ptr->key, ptr->value);
+
+    switch (ptr->operation)
+    {
+    case SET:
+      printf("SET]\n");
+
+      set(hash_table, STRING, ptr->key, ptr->value, ptr->expiresAt);
+
+      responses[idx] = (char *)malloc(MAX_RESPONSE);
+
+      encodeSimpleString(responses[idx], MAX_RESPONSE, "OK");
+      // strcpy(responses[idx], "OK");
+
+      (*items) += 1;
+
+      break;
+    case INCR:
+      printf("INCR]\n");
+
+      long long number = increment(hash_table, ptr->key);
+
+      if (number == NONUM)
+      {
+        char ERROR_RESP[] = "-ERR value is not an integer or out of range\r\n";
+        responses[idx] = (char *)malloc(strlen(ERROR_RESP));
+
+        snprintf(responses[idx], sizeof(responses[idx]), ERROR_RESP);
+      }
+      else
+      {
+        responses[idx] = (char *)malloc(MAX_RESPONSE);
+        // snprintf(responses[idx], sizeof(responses[idx]), "%lld", number);
+        snprintf(
+            responses[idx],
+            MAX_RESPONSE,
+            ":%lld\r\n" /* ":%lld\r\n" */,
+            number);
+      }
+
+      (*items) += 1;
+
+      break;
+    case GET:
+      printf("GET]\n");
+
+      char *getResp = get(hash_table, ptr->key);
+
+      responses[idx] = (char *)malloc(MAX_RESPONSE);
+
+      encodeSimpleString(responses[idx], MAX_RESPONSE, getResp);
+      // strcpy(responses[idx], getResp);
+
+      (*items) += 1;
+
+      break;
+    default:
+      break;
+    }
+
+    struct TransactionQueue *nodeToBeDeleted = ptr;
+    ptr = ptr->next;
+
+    (*queueSize) -= 1;
+    free(nodeToBeDeleted);
+
+    idx += 1;
+  }
+
+  for (int i = 0; i < (*items); i++)
+  {
+    printf("[RESP = %d] %s\n", i + 1, responses[i]);
+  }
+
+  return responses;
 }
 
 int compare(const char *primary, const char *secondary)
