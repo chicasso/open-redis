@@ -368,9 +368,7 @@ void *handle_client(void *arg)
 						printf("[RESP OUT = %d] %s\n", i + 1, source[i]);
 					}
 
-					// snprintf(response, sizeof(response), "+%d\r\n", size);
-
-					// encodeStringArray(response, source, size);
+					encodeStringArray(response, source, size);
 
 					printf("Response: %s\n", response);
 

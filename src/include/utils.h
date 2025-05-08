@@ -269,8 +269,8 @@ char **execute(struct HashEntry **hash_table, struct TransactionQueue *transacti
 
       responses[idx] = (char *)malloc(MAX_RESPONSE);
 
-      encodeSimpleString(responses[idx], MAX_RESPONSE, "OK");
-      // strcpy(responses[idx], "OK");
+      // encodeSimpleString(responses[idx], MAX_RESPONSE, "OK");
+      strcpy(responses[idx], "OK");
 
       (*items) += 1;
 
@@ -290,12 +290,12 @@ char **execute(struct HashEntry **hash_table, struct TransactionQueue *transacti
       else
       {
         responses[idx] = (char *)malloc(MAX_RESPONSE);
-        // snprintf(responses[idx], sizeof(responses[idx]), "%lld", number);
-        snprintf(
-            responses[idx],
-            MAX_RESPONSE,
-            ":%lld\r\n" /* ":%lld\r\n" */,
-            number);
+        snprintf(responses[idx], sizeof(responses[idx]), "%lld", number);
+        // snprintf(
+        //     responses[idx],
+        //     MAX_RESPONSE,
+        //     ":%lld\r\n" /* ":%lld\r\n" */,
+        //     number);
       }
 
       (*items) += 1;
@@ -308,8 +308,8 @@ char **execute(struct HashEntry **hash_table, struct TransactionQueue *transacti
 
       responses[idx] = (char *)malloc(MAX_RESPONSE);
 
-      encodeSimpleString(responses[idx], MAX_RESPONSE, getResp);
-      // strcpy(responses[idx], getResp);
+      // encodeSimpleString(responses[idx], MAX_RESPONSE, getResp);
+      strcpy(responses[idx], getResp);
 
       (*items) += 1;
 
