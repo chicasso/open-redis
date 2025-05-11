@@ -5,11 +5,23 @@
 #include "encoder.h"
 #include <sys/time.h>
 
-int calculateDigits(int number);
 int calculateExponent(int e, int p);
+
+int calculateDigits(int number);
+
+unsigned int hash(const char *);
+
+void setValue(struct HashEntry **, enum RedisTypes, const char *, const char *, const long long);
+
+char *get(struct HashEntry **, const char *);
+
+long long increment(struct HashEntry **, const char *);
+
+char **execute(struct HashEntry **, struct TransactionQueue *, int *, int *);
 
 int compare(const char *, const char *);
 
+/** FUNCTIONS */
 int calculateExponent(int e, int p)
 {
   int exponent = e;
@@ -44,7 +56,7 @@ unsigned int hash(const char *key)
   return hash % TABLE_SIZE;
 }
 
-void set(struct HashEntry **hash_table, enum RedisTypes type, const char *key, const char *value, const long long expiry)
+void setValue(struct HashEntry **hash_table, enum RedisTypes type, const char *key, const char *value, const long long expiry)
 {
   struct timeval time; /* Getting time of the day from "sys/time.h" */
   gettimeofday(&time, NULL);
@@ -220,7 +232,7 @@ long long increment(struct HashEntry **hash_table, const char *key)
 
   if (value == NULL)
   { // Key is not present
-    set(hash_table, NUMBER, key, (const char *)"1", -1);
+    setValue(hash_table, NUMBER, key, (const char *)"1", -1);
     return 1;
   }
   else
@@ -243,7 +255,7 @@ long long increment(struct HashEntry **hash_table, const char *key)
         "%lld",
         number);
 
-    set(hash_table, NUMBER, key, newValue, -1);
+    setValue(hash_table, NUMBER, key, newValue, -1);
     return number;
   }
 }
@@ -265,7 +277,7 @@ char **execute(struct HashEntry **hash_table, struct TransactionQueue *transacti
     case SET:
       printf("SET]\n");
 
-      set(hash_table, STRING, ptr->key, ptr->value, ptr->expiresAt);
+      setValue(hash_table, STRING, ptr->key, ptr->value, ptr->expiresAt);
 
       responses[idx] = (char *)malloc(MAX_RESPONSE);
 
@@ -290,12 +302,13 @@ char **execute(struct HashEntry **hash_table, struct TransactionQueue *transacti
       else
       {
         responses[idx] = (char *)malloc(MAX_RESPONSE);
-        snprintf(responses[idx], sizeof(responses[idx]), "%lld", number);
-        // snprintf(
-        //     responses[idx],
-        //     MAX_RESPONSE,
-        //     ":%lld\r\n" /* ":%lld\r\n" */,
-        //     number);
+        // snprintf(responses[idx], sizeof(responses[idx]), "%lld", number);
+
+        snprintf(
+            responses[idx],
+            MAX_RESPONSE,
+            ":%lld\r\n" /* ":%lld\r\n" */,
+            number);
       }
 
       (*items) += 1;
@@ -309,7 +322,10 @@ char **execute(struct HashEntry **hash_table, struct TransactionQueue *transacti
       responses[idx] = (char *)malloc(MAX_RESPONSE);
 
       // encodeSimpleString(responses[idx], MAX_RESPONSE, getResp);
-      strcpy(responses[idx], getResp);
+
+      encodeNumberFromChar(responses[idx], getResp);
+
+      // strcpy(responses[idx], getResp);
 
       (*items) += 1;
 

@@ -5,6 +5,17 @@
 #include "utils.h"
 #include "globals.h"
 
+void encodeBulkString(char *, int, char *, int);
+
+void encodeNumber(char *, int);
+
+void encodeNumberFromChar(char *, char *);
+
+void encodeSimpleString(char *, int, char *);
+
+void encodeStringArray(char *, char **, int);
+
+/** FUNCTIONS */
 void encodeBulkString(char *destination, int size, char *source, int length)
 {
 	/** FORMAT:
@@ -29,6 +40,19 @@ void encodeNumber(char *destination, int number)
 			destination,
 			64,
 			":%d\r\n",
+			number);
+}
+
+void encodeNumberFromChar(char *destination, char *number)
+{
+	/** FORMAT:
+	 * ":<number>\r\n"
+	 */
+
+	snprintf(
+			destination,
+			64,
+			":%s\r\n",
 			number);
 }
 

@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <pthread.h>
+
 #include "include/globals.h"
 #include "include/parsers.h"
 #include "include/encoder.h"
@@ -169,7 +170,7 @@ void *handle_client(void *arg)
 			}
 			else
 			{
-				set(hash_table, STRING, commands[1], commands[2], expiry);
+				setValue(hash_table, STRING, commands[1], commands[2], expiry);
 				encodeSimpleString(response, sizeof(response), "OK");
 				send(client_fd, response, strlen(response), 0);
 			}
